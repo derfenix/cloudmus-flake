@@ -18,6 +18,7 @@ tmp=$(mktemp -d)
 launcher_pid=""
 app_pid=""
 child_pids=""
+pgid=""
 
 cleanup() {
     set +e
@@ -26,8 +27,16 @@ cleanup() {
     for pid in $child_pids $app_pid $launcher_pid; do
         [ -n "$pid" ] && kill -9 "$pid" 2>/dev/null
     done
-    sleep 0.3
-    rm -rf "$tmp"
+    # Сервисы, поднятые на нашем приватном шине (kwalletd, порталы), живут в группе
+    # лаунчера и продолжают писать в $tmp уже после rm -rf — забираем всю группу.
+    if [ -n "$pgid" ] && [ "$pgid" = "$launcher_pid" ]; then
+        kill -9 -- "-$pgid" 2>/dev/null
+    fi
+    for _ in $(seq 1 20); do
+        rm -rf "$tmp"
+        [ ! -e "$tmp" ] && break
+        sleep 0.3
+    done
 }
 trap cleanup EXIT
 
@@ -42,12 +51,25 @@ find_app() {
     return 1
 }
 
+# Свой dbus-сеанс в отдельной группе процессов: по её завершению уходят и
+# сервисы, которые шина поднимает сама.
+launch() {
+    if command -v setsid >/dev/null; then
+        setsid "$@" &
+    else
+        "$@" &
+    fi
+    launcher_pid=$!
+    # без disown bash сообщает «Убито» о задании, которое мы гасим сами
+    disown 2>/dev/null || true
+    pgid=$(ps -o pgid= -p "$launcher_pid" 2>/dev/null | tr -d ' ')
+}
+
 HOME="$tmp" \
 XDG_CONFIG_HOME="$tmp/config" XDG_CACHE_HOME="$tmp/cache" \
 XDG_DATA_HOME="$tmp/data" XDG_STATE_HOME="$tmp/state" \
 QT_QPA_PLATFORM=offscreen \
-    dbus-run-session -- "$bin" </dev/null >"$tmp/log" 2>&1 &
-launcher_pid=$!
+    launch dbus-run-session -- "$bin" </dev/null >"$tmp/log" 2>&1
 
 for _ in $(seq 1 40); do
     app_pid=$(find_app) || app_pid=""

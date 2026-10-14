@@ -18,8 +18,17 @@ command -v nix >/dev/null || { echo "нет nix в PATH" >&2; exit 1; }
 current=$(sed -n 's/^      version = "\([^"]*\)";$/\1/p' "$flake")
 [ -n "$current" ] || { echo "не нашёл пин CloudMus в $flake" >&2; exit 1; }
 
+# Токен нужен только чтобы не упираться в лимит анонимных запросов на раннере; в
+# отсутствие переменных запрос уходит анонимно. Значение нигде не печатается.
+auth=()
+if [ -n "${GITHUB_TOKEN:-}" ]; then
+    auth=(-H "Authorization: Bearer $GITHUB_TOKEN")
+elif [ -n "${GH_TOKEN:-}" ]; then
+    auth=(-H "Authorization: Bearer $GH_TOKEN")
+fi
+
 latest=$(
-    curl -fsSL -H 'Accept: application/vnd.github+json' \
+    curl -fsSL "${auth[@]}" -H 'Accept: application/vnd.github+json' \
         "https://api.github.com/repos/$repo/releases/latest" |
         python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])'
 )
@@ -36,6 +45,23 @@ url="https://github.com/$repo/archive/refs/tags/$latest.tar.gz"
 echo "считаю хеш по скачанному архиву: $url"
 hash=$(nix store prefetch-file --unpack --json "$url" |
     python3 -c 'import json,sys; print(json.load(sys.stdin)["hash"])')
+
+# Хеш попадает в flake.nix, поэтому проверяем его форму до любой записи: иначе при
+# странном ответе prefetch туда уехало бы, например, hash = "".
+python3 - "$hash" <<'PY' || exit 1
+import base64, re, sys
+value = sys.argv[1]
+match = re.fullmatch(r'sha256-([A-Za-z0-9+/]+={0,2})', value)
+if match is None:
+    sys.exit(f"хеш не в формате sha256-SRI: {value!r} — файл не тронут")
+try:
+    raw = base64.b64decode(match.group(1), validate=True)
+except Exception as exc:
+    sys.exit(f"в хеше не base64: {value!r} ({exc}) — файл не тронут")
+if len(raw) != 32:
+    sys.exit(f"в хеше {len(raw)} байт вместо 32 — файл не тронут")
+PY
+
 echo "хеш: $hash"
 
 python3 - "$flake" "$readme" "$current" "$latest" "$hash" <<'PY'

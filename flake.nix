@@ -71,9 +71,11 @@
       # The PyPI library the Yandex Music backend is built on. nixpkgs does
       # not package it (no python3Packages.yandex-music), so it is built here.
       #
-      # 3.2.2 is the newest release, and exactly the version upstream's 0.6.2
-      # AppImage bundles (usr/python-runtime/lib/python3.11/site-packages/
-      # yandex_music-3.2.2.dist-info); the backend asks for >=3.0.0.
+      # 3.2.2 — версия, которая лежала в AppImage upstream в тот момент, когда мы
+      # её выбирали (сверяли с их релизом 0.6.2, usr/python-runtime/lib/python3.11/
+      # site-packages/yandex_music-3.2.2.dist-info); бэкенд просит >=3.0.0.
+      # Сам по себе этот пин не устаревает, но сверка — историческая: обновляя
+      # его, посмотрите, что лежит в их AppImage сейчас.
       #
       # The dependency list below is not guessed: it is what the published
       # metadata of that release declares (PEP 658, fetched from

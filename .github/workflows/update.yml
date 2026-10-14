@@ -36,6 +36,10 @@ jobs:
 
       - name: Обновить пин
         id: bump
+        env:
+          # Свой же токен, чтобы не упираться в лимит анонимных запросов на
+          # раннере. Секретов настраивать не нужно, и в лог он не попадает.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           ./scripts/update-cloudmus.sh
           if git diff --quiet; then
@@ -52,7 +56,7 @@ jobs:
           nix flake check
 
       - name: Коммит и пуш
-        if: ${{ steps.bump.outputs.changed == 'true' }}
+        if: ${{ success() && steps.bump.outputs.changed == 'true' }}
         run: |
           version=$(sed -n 's/^      version = "\([^"]*\)";$/\1/p' flake.nix)
           git config user.name 'github-actions[bot]'
