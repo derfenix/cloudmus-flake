@@ -1,0 +1,9 @@
+result
+result-*
+
+# редакторы
+.vscode/
+.idea/
+*.swp
+*~
+.#*

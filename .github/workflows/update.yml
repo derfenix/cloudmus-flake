@@ -1,0 +1,62 @@
+name: Update the CloudMus pin
+
+# Раз в неделю и по кнопке смотрит последний релиз cloudmus/cloudmus. Если он новее
+# пина в flake.nix — считает хеш по реально скачанному архиву, собирает flake и только
+# после успешной сборки коммитит. Пин библиотеки yandex-music не трогается (см. flake.nix).
+#
+# Проверка идёт в этом же workflow специально: коммит, сделанный через GITHUB_TOKEN,
+# не запускает другие workflow, поэтому «сборка на push» для него не сработала бы.
+#
+# Секретов не нужно: хватает штатного GITHUB_TOKEN с contents: write.
+
+on:
+  schedule:
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      verify:
+        description: 'Собрать текущий пин, даже если он не изменился'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-pin
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+
+      - uses: cachix/install-nix-action@v31.11.2
+
+      - name: Обновить пин
+        id: bump
+        run: |
+          ./scripts/update-cloudmus.sh
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            git diff
+          fi
+
+      - name: Сборка (гейт)
+        if: ${{ steps.bump.outputs.changed == 'true' || github.event.inputs.verify == 'true' }}
+        run: |
+          nix build .#default --no-link --print-build-logs
+          nix flake check
+
+      - name: Коммит и пуш
+        if: ${{ steps.bump.outputs.changed == 'true' }}
+        run: |
+          version=$(sed -n 's/^      version = "\([^"]*\)";$/\1/p' flake.nix)
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add flake.nix README.md
+          git commit -m "CloudMus $version"
+          git push
