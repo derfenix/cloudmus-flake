@@ -10,7 +10,7 @@
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
 
-      version = "0.6.2";
+      version = "0.6.3";
 
       # Upstream tags releases without a leading "v" (0.6.2, not v0.6.2) and
       # ships no submodules (.gitmodules does not exist in the repo), so a
@@ -19,7 +19,7 @@
         owner = "cloudmus";
         repo = "cloudmus";
         tag = version;
-        hash = "sha256-hgHj1YrtIAilMF9PXxyY4rNzJrkT3Rdq9bNYPkr7oHc=";
+        hash = "sha256-+sGWsIYxQeHWyJPUU4OI8lZ7/oBPGQ6dAl1JEW4cgi4=";
       };
 
       # --- Generated protocol code ------------------------------------------
